@@ -1,15 +1,13 @@
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Created by Łukasz on 2016-12-09.
+ * Created by Łukasz on 2016-12-13.
  */
 public class QuickSorter {
     public static void quickSort(int[] array){
-        ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(4);
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(4);
+        AtomicInteger counter = new AtomicInteger(1);
         class SplitTask implements Runnable{
             private int start;
             private int end;
@@ -17,24 +15,46 @@ public class QuickSorter {
                 this.start = start;
                 this.end = end;
             }
+
             @Override
             public void run() {
-                int pivotPos = split(array, start, end);
-                if(pivotPos > start+1)
-                    executorService.execute(new SplitTask(start, pivotPos-1));
-                if(pivotPos < end-1)
-                    executorService.execute(new SplitTask(pivotPos+1, end));
+                if (end - start > 100) {
+                    int pivotPos = split(array, start, end);
+                    if (pivotPos > start + 1) {
+                        executor.execute(new SplitTask(start, pivotPos - 1));
+                        counter.getAndIncrement();
+                    }
+                    if (pivotPos < end - 1) {
+                        executor.execute(new SplitTask(pivotPos + 1, end));
+                        counter.getAndIncrement();
+                    }
+                } else {
+                    nonParallelQS(array, start, end);
+                }
+                counter.getAndDecrement();
+
             }
+
         }
-        executorService.execute(new SplitTask(0,array.length-1));
-        while(executorService.getQueue().size()!=0 || executorService.getActiveCount()!=0){
+        executor.execute(new SplitTask(0, array.length-1))  ;
+
+
+        while(counter.get()!=0)
+        {
+
         }
-        try {
-            executorService.shutdown();
-            executorService.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+
+        try{
+
+            executor.shutdown();
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
         }catch (Exception e){
-            System.out.println(e);
+            e.printStackTrace();
         }
+
+
+
+
     }
 
     private static int split(int[] array, int start, int end){
@@ -56,5 +76,11 @@ public class QuickSorter {
         return endPivotPos;
     }
 
-
+    public static void nonParallelQS(int[] array, int start, int end){
+        int p = split(array, start, end);
+        if(p > start+1)
+            nonParallelQS(array, start, p-1);
+        if(end>p+1)
+            nonParallelQS(array, p+1, end);
+    }
 }
